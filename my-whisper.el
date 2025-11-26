@@ -124,14 +124,28 @@ Returns nil if file doesn't exist or is empty."
         (unless (string-empty-p content)
           word-count)))))
 
+(defun my-whisper--validate-environment ()
+  "Validate current settings.  Issue a user error if something is wrong."
+  (unless (file-directory-p my-whisper-homedir)
+    (user-error "Invalid my-whisper-homedir (%s)" my-whisper-homedir))
+  (unless (file-executable-p my-whisper-cli)
+    (if (file-exists-p my-whisper-cli)
+        (user-error "my-whisper-cli (%s) is not an executable file"
+                    my-whisper-cli))
+    (user-error "my-whisper-cli (%s) does not exist" my-whisper-cli))
+  (unless (file-exists-p my-whisper-model-path)
+    (user-error "my-whisper-model-path (%s) does not exist"
+                my-whisper-model-path)))
+
 (defun my-whisper-transcribe-fast ()
   "Record audio and transcribe using Whisper base.en model (fast).
 Records audio until you press \\[keyboard-quit], then transcribes it
 and inserts the text at point."
   (interactive)
+  (my-whisper--validate-environment)
   (let* ((original-buf (current-buffer))
-         (original-point (point-marker))  ; Marker tracks position even if buffer changes
-         (wav-file "/tmp/whisper-recording.wav")
+         (original-point (point-marker)) ; Marker tracks position even if buffer changes
+         (wav-file (format "/tmp/whisper-recording-%s.wav" (emacs-pid)))
          (temp-buf (generate-new-buffer " *Whisper Temp*"))
          (vocab-prompt (my-whisper--get-vocabulary-prompt))
          (vocab-word-count (my-whisper--check-vocabulary-length)))
@@ -149,8 +163,7 @@ and inserts the text at point."
       (quit (interrupt-process "record-audio")))
 
     ;; Run Whisper STT with base.en model
-    (let* (
-           (whisper-cmd (if vocab-prompt
+    (let* ((whisper-cmd (if vocab-prompt
                             (format "%s -m %s -f %s -nt -np --prompt \"%s\" 2>/dev/null"
                                     my-whisper-cli
                                     my-whisper-model-path
@@ -171,7 +184,7 @@ and inserts the text at point."
                 (when (buffer-live-p ,original-buf)
                   (with-current-buffer ,original-buf
                     (goto-char ,original-point)
-                    (insert output " ")  ;; Insert text with a single space after
+                    (insert output " ") ;; Insert text with a single space after
                     (goto-char (point))))) ;; Move cursor to end of inserted text
               ;; Clean up temporary buffer
               (kill-buffer ,temp-buf))))))))
@@ -182,9 +195,10 @@ Uses the model specified in `my-whisper-model-path'.  Records audio
 until you press \\[keyboard-quit], then transcribes it and inserts the
 text at point."
   (interactive)
+  (my-whisper--validate-environment)
   (let* ((original-buf (current-buffer))
-         (original-point (point-marker))  ; Marker tracks position even if buffer changes
-         (wav-file "/tmp/whisper-recording.wav")
+         (original-point (point-marker)) ; Marker tracks position even if buffer changes
+         (wav-file (format "/tmp/whisper-recording-%s.wav" (emacs-pid)))
          (temp-buf (generate-new-buffer " *Whisper Temp*"))
          (vocab-prompt (my-whisper--get-vocabulary-prompt))
          (vocab-word-count (my-whisper--check-vocabulary-length)))
@@ -202,8 +216,7 @@ text at point."
       (quit (interrupt-process "record-audio")))
 
     ;; Run Whisper STT
-    (let* (
-           (whisper-cmd (if vocab-prompt
+    (let* ((whisper-cmd (if vocab-prompt
                             (format "%s -m %s -f %s -nt -np --prompt \"%s\" 2>/dev/null"
                                     my-whisper-cli
                                     my-whisper-model-path

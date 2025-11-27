@@ -47,9 +47,9 @@
 ;;   M-x my-whisper-transcribe-fast  ; Fast mode (base.en model)
 ;;   M-x my-whisper-transcribe       ; Accurate mode (medium.en)
 
-;; Default keybindings:
-;;   C-c v - Fast transcription
-;;   C-c n - Accurate transcription
+;; Recommended keybindings (add to your init.el):
+;;   (global-set-key (kbd "C-c v") #'my-whisper-transcribe-fast)
+;;   (global-set-key (kbd "C-c n") #'my-whisper-transcribe)
 
 ;; See the README for installation and configuration details.
 
@@ -80,14 +80,16 @@ Select one of the following:
           (const :tag "Medium model: accurate mode" "ggml-medium.en.bin")
           (string :tag "Other")))
 
-(defconst my-whisper-cli  (format "%s/build/bin/whisper-cli"
-                                   (directory-file-name my-whisper-homedir))
-  "Path name of the whisper-cli.")
+(defun my-whisper--cli-path ()
+  "Return the path to the whisper-cli executable."
+  (format "%s/build/bin/whisper-cli"
+          (directory-file-name my-whisper-homedir)))
 
-(defconst my-whisper-model-path (format "%s/models/%s"
-                                    (directory-file-name my-whisper-homedir)
-                                    my-whisper-model)
-  "Path name of the whisper model.")
+(defun my-whisper--model-path ()
+  "Return the path to the whisper model file."
+  (format "%s/models/%s"
+          (directory-file-name my-whisper-homedir)
+          my-whisper-model))
 
 
 (defcustom my-whisper-vocabulary-file (expand-file-name (locate-user-emacs-file "whisper-vocabulary.txt"))
@@ -99,7 +101,7 @@ should recognize.
 You can either customize this path or set it in your init.el:
   (setq my-whisper-vocabulary-file \"/path/to/your/vocabulary.txt\")"
   :group 'my-whisper
-  :type 'directory)
+  :type 'file)
 
 (defun my-whisper--get-vocabulary-prompt ()
   "Read vocabulary file and return as a prompt string for Whisper.
@@ -126,16 +128,18 @@ Returns nil if file doesn't exist or is empty."
 
 (defun my-whisper--validate-environment ()
   "Validate current settings.  Issue a user error if something is wrong."
-  (unless (file-directory-p my-whisper-homedir)
-    (user-error "Invalid my-whisper-homedir (%s)" my-whisper-homedir))
-  (unless (file-executable-p my-whisper-cli)
-    (if (file-exists-p my-whisper-cli)
-        (user-error "my-whisper-cli (%s) is not an executable file"
-                    my-whisper-cli))
-    (user-error "my-whisper-cli (%s) does not exist" my-whisper-cli))
-  (unless (file-exists-p my-whisper-model-path)
-    (user-error "my-whisper-model-path (%s) does not exist"
-                my-whisper-model-path)))
+  (let ((cli-path (my-whisper--cli-path))
+        (model-path (my-whisper--model-path)))
+    (unless (file-directory-p my-whisper-homedir)
+      (user-error "Invalid my-whisper-homedir (%s)" my-whisper-homedir))
+    (unless (file-executable-p cli-path)
+      (if (file-exists-p cli-path)
+          (user-error "My-whisper-cli (%s) is not an executable file"
+                      cli-path))
+      (user-error "My-whisper-cli (%s) does not exist" cli-path))
+    (unless (file-exists-p model-path)
+      (user-error "My-whisper-model-path (%s) does not exist"
+                  model-path))))
 
 (defun my-whisper-transcribe-fast ()
   "Record audio and transcribe using Whisper base.en model (fast).
@@ -165,13 +169,13 @@ and inserts the text at point."
     ;; Run Whisper STT with base.en model
     (let* ((whisper-cmd (if vocab-prompt
                             (format "%s -m %s -f %s -nt -np --prompt \"%s\" 2>/dev/null"
-                                    my-whisper-cli
-                                    my-whisper-model-path
+                                    (my-whisper--cli-path)
+                                    (my-whisper--model-path)
                                     wav-file
                                     (replace-regexp-in-string "\"" "\\\\\"" vocab-prompt))
                           (format "%s -m %s -f %s -nt -np 2>/dev/null"
-                                  my-whisper-cli
-                                  my-whisper-model-path
+                                  (my-whisper--cli-path)
+                                  (my-whisper--model-path)
                                   wav-file)))
            (proc (start-process "whisper-stt" temp-buf "/bin/sh" "-c" whisper-cmd)))
       ;; Properly capture `temp-buf` using a lambda
@@ -218,13 +222,13 @@ text at point."
     ;; Run Whisper STT
     (let* ((whisper-cmd (if vocab-prompt
                             (format "%s -m %s -f %s -nt -np --prompt \"%s\" 2>/dev/null"
-                                    my-whisper-cli
-                                    my-whisper-model-path
+                                    (my-whisper--cli-path)
+                                    (my-whisper--model-path)
                                     wav-file
                                     (replace-regexp-in-string "\"" "\\\\\"" vocab-prompt))
                           (format "%s -m %s -f %s -nt -np 2>/dev/null"
-                                  my-whisper-cli
-                                  my-whisper-model-path
+                                  (my-whisper--cli-path)
+                                  (my-whisper--model-path)
                                   wav-file)))
            (proc (start-process "whisper-stt" temp-buf "/bin/sh" "-c" whisper-cmd)))
       ;; Properly capture `temp-buf` using a lambda
@@ -245,9 +249,6 @@ text at point."
                 (when (file-exists-p ,wav-file)
                   (delete-file ,wav-file)))
             (message "Whisper process error: %s" event)))))))
-
-(global-set-key (kbd "C-c v") #'my-whisper-transcribe-fast)
-(global-set-key (kbd "C-c n") #'my-whisper-transcribe)
 
 (provide 'my-whisper)
 ;;; my-whisper.el ends here

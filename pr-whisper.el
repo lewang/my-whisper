@@ -309,7 +309,6 @@ TEXT is filtered based on `pr-whisper-history-filter-regexp' and
      :connection-type 'pipe
      :stderr (get-buffer-create "*pr-whisper err*")
      :sentinel (lambda (_proc event)
-                 (message "event %s" event)
                  (if (string= event "finished\n")
                      (when (buffer-live-p temp-buf)
                        ;; Trim excess white space
@@ -321,9 +320,7 @@ TEXT is filtered based on `pr-whisper-history-filter-regexp' and
                            (when (buffer-live-p original-buf)
                              (with-current-buffer original-buf
                                (if (eq major-mode 'vterm-mode)
-                                   (progn
-                                     (message "pr-whisper vterm sending %s" output)
-                                     (vterm-send-string (concat output " ")))
+                                   (vterm-send-string (concat output " "))
                                  (goto-char original-point)
                                  ;; Insert text, then a single space
                                  (insert output " ")))

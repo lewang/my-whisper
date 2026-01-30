@@ -76,14 +76,8 @@
   :group 'my-whisper
   :type 'string)
 
-(defcustom my-whisper-key-for-stop-record (kbd "C-c .")
-  "Key binding for `my-whisper-stop-record'.
-Use a string of the same format that what is the output of `kbd'."
-  :group 'my-whisper
-  :type 'key)
-
-(defcustom my-whisper-key-for-record-again (kbd "C-c ,")
-  "Key binding for `my-whisperrecord-again'.
+(defcustom my-whisper-key-for-toggle (kbd "C-c .")
+  "Key binding for `my-whisper-toggle-recording'.
 Use a string of the same format that what is the output of `kbd'."
   :group 'my-whisper
   :type 'key)
@@ -329,14 +323,6 @@ Entries are promoted to most recent when re-inserted via
   (my-whisper--transcribe))
 
 ;;;###autoload
-(defun my-whisper-record-again ()
-  "Start recording again."
-  (interactive)
-  (if my-whisper--recording-process-name
-      (user-error "Already recording!")
-    (my-whisper-record-audio)))
-
-;;;###autoload
 (defun my-whisper-toggle-recording ()
   "Toggle recording on/off."
   (interactive)
@@ -350,7 +336,7 @@ Entries are promoted to most recent when re-inserted via
 
 (defvar my-whisper-keymap
   (let ((map (make-sparse-keymap)))
-    (define-key map my-whisper-key-for-stop-record #'my-whisper-toggle-recording)
+    (define-key map my-whisper-key-for-toggle #'my-whisper-toggle-recording)
     map))
 
 ;;;###autoload
@@ -370,7 +356,7 @@ When recording stops, transcribed text is inserted at point.
         (setq my-whisper--wav-file wav-file)
         (my-whisper--set-lighter-to my-whisper-lighter-when-idle)
         (message "my-whisper-mode enabled. Press %s to start recording."
-                 (key-description my-whisper-key-for-stop-record)))
+                 (key-description my-whisper-key-for-toggle)))
 
     ;; Stop minor mode: stop recording if active
     (when my-whisper--recording-process-name

@@ -22,14 +22,14 @@ in my PEL project inside the [Writing Tools PDF](https://raw.githubusercontent.c
 
 ## Features
 
-- Record audio with simple key bindings
-- Several transcription modes selected by customization, including:
-  - **Fast mode** (`C-c n`): Uses base.en model for quick transcription
-  - **Accurate mode** (`C-c v`): Uses medium.en model for more accurate results
-- **Vocabulary hints**: Provide a custom vocabulary file to improve recognition of proper nouns and specialized terms (e.g., Greek names like Socrates, Alcibiades, Diotima)
+- **Simple toggle interface**: Single key (`C-c .`) to start/stop recording
+- **Model selection**: Choose from multiple Whisper models via customization
+- **Vocabulary hints**: Provide a custom vocabulary file to improve recognition of proper nouns and specialized
+  terms (e.g., Greek names like Socrates, Alcibiades, Diotima)
+- **Transcription history**: Browse and re-insert previous transcriptions with `M-x my-whisper-insert-from-history`
 - Automatic transcription using Whisper.cpp
 - Text insertion at cursor position
-- Non-blocking recording with user-controlled stop
+- Async processing - Emacs remains responsive during transcription
 
 ## Prerequisites
 
@@ -81,27 +81,28 @@ This provides the **my-whisper-mode**, a global minor mode that provides the abi
 
 ### Key Bindings
 
-- **`M-x my-whisper-mode`**: Start recording using the selected model.
-- **`C-c .`**: Stop recording, transcribe recorded speech into text and insert in current buffer at point.
-- **`C-c ,`**: Start recording again.
-- **`M-x my-whisper-mode`**: Turn my-whisper-mode off.
+- **`M-x my-whisper-mode`**: Enable the global minor mode (does not start recording).
+- **`C-c .`**: Toggle recording on/off. When stopped, transcribes and inserts text at point.
+- **`M-x my-whisper-mode`**: Disable the mode (stops any active recording).
 
 
 ### Basic Workflow
 
-1. **Start recording**: Press `C-c n` (fast) or `C-c v` (accurate) to begin recording audio
-2. **Stop recording**: Press `C-g` to stop recording and start transcription
-3. **Get results**: The transcribed text will be automatically inserted at your cursor position
+1. **Enable mode**: `M-x my-whisper-mode`
+2. **Start recording**: Press `C-c .`
+3. **Stop and transcribe**: Press `C-c .` again
+4. **Get results**: The transcribed text is automatically inserted at your cursor position
 
 ### Example
 
 1. Open any text buffer in Emacs
-2. Position your cursor where you want the transcribed text
-3. Press `C-c n` for fast transcription or `C-c v` for accurate transcription
-4. Speak into your microphone
-5. Press `C-g` when finished speaking
-6. Wait a moment for transcription to complete
-7. The text appears at your cursor position
+2. Enable the mode: `M-x my-whisper-mode`
+3. Position your cursor where you want the transcribed text
+4. Press `C-c .` to start recording
+5. Speak into your microphone
+6. Press `C-c .` when finished speaking
+7. Wait a moment for transcription to complete
+8. The text appears at your cursor position
 
 ## Configuration
 
@@ -133,12 +134,11 @@ Run `M-x customize-group RET my-whisper RET` to access all customization options
 
 ### Custom Key Bindings
 
-To change the key bindings, add to your `init.el`:
+To change the toggle key binding, customize `my-whisper-key-for-toggle` or set it before loading:
 
 ```elisp
-;; Use different key bindings
-(global-set-key (kbd "C-c s") #'my-whisper-transcribe-fast)  ; Fast mode
-(global-set-key (kbd "C-c S") #'my-whisper-transcribe)       ; Accurate mode
+;; Use a different key binding for toggle
+(setq my-whisper-key-for-toggle (kbd "C-c s"))
 ```
 
 ### Custom Vocabulary for Proper Nouns

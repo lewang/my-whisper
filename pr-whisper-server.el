@@ -34,12 +34,9 @@
 ;;; Code:
 
 (require 'pr-whisper)
+(require 'url)
 
 (declare-function vterm-send-string "vterm")
-
-(defvar url-request-method)
-(defvar url-request-extra-headers)
-(defvar url-request-data)
 
 (defvar pr-whisper--server-process nil
   "Process handle for whisper-server when using server backend.")

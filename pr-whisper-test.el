@@ -161,6 +161,9 @@
   (should (pr-whisper--noise-p "(typing)"))
   (should (pr-whisper--noise-p "[music]"))
   (should (pr-whisper--noise-p "(applause)"))
+  (should (pr-whisper--noise-p "[ Pause ]"))
+  (should (pr-whisper--noise-p "[pause]"))
+  (should (pr-whisper--noise-p "[PAUSE]"))
   (should-not (pr-whisper--noise-p "Hello world"))
   (should-not (pr-whisper--noise-p "The silence was deafening")))
 

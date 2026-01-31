@@ -313,6 +313,30 @@ shorter than `pr-whisper-history-min-length'."
       (setq pr-whisper--history-ring (make-ring pr-whisper-history-capacity)))
     (ring-insert pr-whisper--history-ring (cons text buffer-name))))
 
+(defun pr-whisper--handle-transcription (output original-buf marker)
+  "Handle transcription OUTPUT, inserting at MARKER in ORIGINAL-BUF.
+Checks for empty output, noise, adds to history, and inserts text."
+  (setq output (string-trim output))
+  (cond
+   ((string-empty-p output)
+    (message "Whisper: No transcription output."))
+   ((pr-whisper--noise-p output)
+    (message "Whisper: Ignored noise: %s" output))
+   (t
+    ;; Add to history first, before attempting insertion
+    ;; so transcription is saved even if insertion fails
+    (pr-whisper--add-to-history output (buffer-name original-buf))
+    (when (buffer-live-p original-buf)
+      (with-current-buffer original-buf
+        (condition-case nil
+            (if (eq major-mode 'vterm-mode)
+                (vterm-send-string (concat output " "))
+              (goto-char marker)
+              (insert output " "))
+          (buffer-read-only
+           (message "Whisper: Buffer is read-only, text saved to history: %s"
+                    (truncate-string-to-width output 50 nil nil "...")))))))))
+
 (defun pr-whisper--transcribe ()
   "Transcribe audio previously recorded.
 Uses server backend if server process is running, otherwise CLI."
@@ -352,30 +376,9 @@ Uses server backend if server process is running, otherwise CLI."
      :sentinel (lambda (_proc event)
                  (if (string= event "finished\n")
                      (when (buffer-live-p temp-buf)
-                       ;; Trim excess white space
-                       (let ((output (string-trim
-                                      (with-current-buffer temp-buf
-                                        (buffer-string)))))
-                         (cond
-                          ((string-empty-p output)
-                           (message "Whisper: No transcription output."))
-                          ((pr-whisper--noise-p output)
-                           (message "Whisper: Ignored noise: %s" output))
-                          (t
-                           ;; Add to history first, before attempting insertion
-                           ;; so transcription is saved even if insertion fails
-                           (pr-whisper--add-to-history output (buffer-name original-buf))
-                           (when (buffer-live-p original-buf)
-                             (with-current-buffer original-buf
-                               (condition-case nil
-                                   (if (eq major-mode 'vterm-mode)
-                                       (vterm-send-string (concat output " "))
-                                     (goto-char original-point)
-                                     ;; Insert text, then a single space
-                                     (insert output " "))
-                                 (buffer-read-only
-                                  (message "Whisper: Buffer is read-only, text saved to history: %s"
-                                           (truncate-string-to-width output 50 nil nil "...")))))))))
+                       (pr-whisper--handle-transcription
+                        (with-current-buffer temp-buf (buffer-string))
+                        original-buf original-point)
                        ;; Clean up temporary buffer
                        (kill-buffer temp-buf)
                        ;; And delete WAV file that has been processed.

@@ -36,8 +36,6 @@
 (require 'pr-whisper)
 (require 'url)
 
-(declare-function vterm-send-string "vterm")
-
 (defvar pr-whisper--server-process nil
   "Process handle for whisper-server when using server backend.")
 
@@ -118,25 +116,8 @@
            (message "Whisper server error: %s" (plist-get status :error))
          (goto-char (point-min))
          (re-search-forward "\r?\n\r?\n" nil t)  ; Skip HTTP headers
-         (let ((output (string-trim (buffer-substring (point) (point-max)))))
-           (cond
-            ((string-empty-p output)
-             (message "Whisper: No transcription output."))
-            ((pr-whisper--noise-p output)
-             (message "Whisper: Ignored noise: %s" output))
-            (t
-             ;; Add to history first, before attempting insertion
-             (pr-whisper--add-to-history output (buffer-name original-buf))
-             (when (buffer-live-p original-buf)
-               (with-current-buffer original-buf
-                 (condition-case nil
-                     (if (eq major-mode 'vterm-mode)
-                         (vterm-send-string (concat output " "))
-                       (goto-char marker)
-                       (insert output " "))
-                   (buffer-read-only
-                    (message "Whisper: Buffer is read-only, text saved to history: %s"
-                             (truncate-string-to-width output 50 nil nil "..."))))))))))
+         (pr-whisper--handle-transcription
+          (buffer-substring (point) (point-max)) original-buf marker))
        ;; Cleanup
        (kill-buffer)
        (when (file-exists-p wav-file)

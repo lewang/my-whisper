@@ -153,7 +153,7 @@ If MODEL is nil, use `pr-whisper-model'."
   :type 'integer)
 
 (defcustom pr-whisper-noise-regexp
-  (rx (or (seq "(" (or "typing" "silence" "music" "applause") ")")
+  (rx (or (seq "(" (or "typing" "silence" "music" "applause" "birds chirping") ")")
           (seq "[" (* space) (or "typing" "silence" "music" "applause" "pause" "BLANK_AUDIO") (* space) "]")))
   "Regexp matching noise transcriptions to ignore.
 Whisper outputs these when it detects non-speech audio.

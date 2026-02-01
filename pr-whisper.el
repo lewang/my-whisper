@@ -310,9 +310,11 @@ Entries are promoted to most recent when re-inserted via
     (message "Recording audio!")))
 
 (defun pr-whisper--noise-p (text)
-  "Return non-nil if TEXT is noise that should be ignored."
+  "Return non-nil if TEXT is entirely noise that should be ignored.
+Only matches if the entire TEXT is a noise pattern, not partial matches."
   (and pr-whisper-noise-regexp
-       (string-match-p pr-whisper-noise-regexp text)))
+       (string-match-p (concat "\\`" pr-whisper-noise-regexp "\\'")
+                       (string-trim text))))
 
 (defun pr-whisper--too-short-p (text)
   "Return non-nil if TEXT is too short for history."

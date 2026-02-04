@@ -161,7 +161,10 @@ Matching transcriptions are not inserted and not added to history.
 Set to nil to disable noise filtering."
   :group 'pr-whisper
   :type '(choice (const :tag "No filtering" nil)
-                 (regexp :tag "Filter regexp")))
+                 (regexp :tag "Filter regexp"))
+  :initialize (lambda (sym exp)
+                (unless (get sym 'saved-value)
+                  (set-default-toplevel-value sym (eval exp)))))
 
 (defcustom pr-whisper-history-min-length 3
   "Minimum character length for transcription to be added to history.
@@ -313,7 +316,7 @@ Entries are promoted to most recent when re-inserted via
   "Return non-nil if TEXT is entirely noise that should be ignored.
 Only matches if the entire TEXT is a noise pattern, not partial matches."
   (and pr-whisper-noise-regexp
-       (string-match-p (concat "\\`" pr-whisper-noise-regexp "\\'")
+       (string-match-p (concat "\\`\\(?:" pr-whisper-noise-regexp "\\)\\'")
                        (string-trim text))))
 
 (defun pr-whisper--too-short-p (text)

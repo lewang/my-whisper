@@ -141,17 +141,11 @@ see [VOCABULARY-GUIDE.md](VOCABULARY-GUIDE.md).
 
 ### Recording Indicator (Mode Line)
 
-The package provides `pr-whisper-mode-line-indicator`, a mode-line construct that shows a flashing red
-`● REC` in the buffer that initiated recording. It is not displayed by default — add it to your mode line
-wherever you prefer:
+When recording starts, a flashing red `● REC` appears in the mode line of the buffer that initiated
+recording. The indicator is automatically added to `mode-line-format`.
 
-```elisp
-(add-to-list 'mode-line-format 'pr-whisper-mode-line-indicator t)
-```
-
-The indicator alternates between bright and dim red. Customize the faces
-`pr-whisper-recording-bright` and `pr-whisper-recording-dim` to change colors. The flash speed is
-controlled by `pr-whisper-flash-interval` (default 0.5 seconds).
+Customize the faces `pr-whisper-recording-bright` and `pr-whisper-recording-dim` to change colors. The
+flash speed is controlled by `pr-whisper-flash-interval` (default 0.5 seconds).
 
 ## Troubleshooting
 
@@ -174,7 +168,7 @@ controlled by `pr-whisper-flash-interval` (default 0.5 seconds).
 4. **Transcription not working**
    - The package now validates paths on startup and will show clear error messages
    - Verify the model files exist in `~/whisper.cpp/models/`
-   - Run `M-x pr-whisper-transcribe-fast` to see validation errors
+   - Run `M-x pr-whisper-toggle-recording` to see validation errors
    - Test whisper-cli manually with a wav file
 
 ### Testing the Setup

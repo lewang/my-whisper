@@ -40,7 +40,7 @@
 ;; Features:
 ;; - `pr-whisper-toggle-recording' command to start/stop recording.
 ;; - `pr-whisper-transcribe-file' command to transcribe an existing WAV file.
-;; - `pr-whisper-mode-line-indicator' for a flashing recording indicator.
+;; - Flashing recording indicator in the mode line.
 ;; - Custom vocabulary support for specialized terminology
 ;; - Async processing with process sentinels
 
@@ -305,7 +305,7 @@ Entries are promoted to most recent when re-inserted via
                   'help-echo "pr-whisper recording")))
   "Mode line construct showing a flashing recording indicator.
 Only visible in the buffer that initiated recording.
-Add to `mode-line-format' or `mode-line-misc-info' to use.")
+Automatically added to `mode-line-format' when recording starts.")
 (put 'pr-whisper-mode-line-indicator 'risky-local-variable t)
 
 (defvar pr-whisper--mode-line-cell
@@ -354,7 +354,7 @@ Add to `mode-line-format' or `mode-line-misc-info' to use.")
   (let ((record-process-name (format "pr-whisper-record-audio-for-%s" (emacs-pid))))
     (start-process record-process-name
                    nil pr-whisper-sox
-                   "-d" "-r" " 16000" "-c" "1" "-b" "16"
+                   "-d" "-r" "16000" "-c" "1" "-b" "16"
                    pr-whisper--wav-file
                    "--no-show-progress")
     (setq pr-whisper--recording-process-name record-process-name)
@@ -370,8 +370,9 @@ Add to `mode-line-format' or `mode-line-misc-info' to use.")
   "Return non-nil if TEXT is entirely noise that should be ignored.
 Only matches if the entire TEXT is a noise pattern, not partial matches."
   (and pr-whisper-noise-regexp
-       (string-match-p (concat "\\`\\(?:" pr-whisper-noise-regexp "\\)\\'")
-                       (string-trim text))))
+       (let ((case-fold-search t))
+         (string-match-p (concat "\\`\\(?:" pr-whisper-noise-regexp "\\)\\'")
+                         (string-trim text)))))
 
 (defun pr-whisper--too-short-p (text)
   "Return non-nil if TEXT is too short for history."
@@ -417,7 +418,7 @@ If USE-DEFAULT-INSERT is non-nil, bypass custom insert function."
      (t
       ;; Add to history first, before attempting insertion
       ;; so transcription is saved even if insertion fails
-      (pr-whisper--add-to-history output (buffer-name buf))
+      (pr-whisper--add-to-history output (if buf (buffer-name buf) "?"))
       (if (and pr-whisper-insert-function
                (not use-default-insert))
           (funcall pr-whisper-insert-function output marker)
@@ -445,12 +446,12 @@ If USE-DEFAULT-INSERT is non-nil, bypass custom insert function."
                                  "-f" (expand-file-name wav-file)
                                  "-nt"
                                  "-np")))
-    ;; if a vocabulary is defined, add a prompt command with it.
     (when vocab-prompt
-      (setq whisper-cmd-list (reverse whisper-cmd-list))
-      (push "--prompt" whisper-cmd-list)
-      (push (replace-regexp-in-string "\"" "\\\\\"" vocab-prompt) whisper-cmd-list)
-      (setq whisper-cmd-list (reverse whisper-cmd-list)))
+      (setq whisper-cmd-list
+            (append whisper-cmd-list
+                    (list "--prompt"
+                          (replace-regexp-in-string
+                           "\"" "\\\\\"" vocab-prompt)))))
 
     ;; Run Whisper STT (Speech To Text) with selected model
     (make-process

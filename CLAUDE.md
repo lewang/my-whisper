@@ -57,7 +57,7 @@ Single-file Emacs Lisp package (`pr-whisper.el`) with these key components:
 - `pr-whisper-sox`: sox executable path
 - `pr-whisper-history-capacity`: Max transcriptions in history ring (default: 20)
 - `pr-whisper-flash-interval`: Flash speed for recording indicator (default: 0.5s)
-- `pr-whisper-mode-line-indicator`: Mode-line construct for flashing recording indicator
+- `pr-whisper-mode-line-indicator`: Flashing recording indicator (auto-added to `mode-line-format`)
 
 ## External Dependencies
 

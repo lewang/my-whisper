@@ -307,9 +307,12 @@ Entries are promoted to most recent when re-inserted via
   "Mode line construct showing a flashing recording indicator.
 Only visible in the buffer that initiated recording.
 Add to `mode-line-format' or `mode-line-misc-info' to use.")
+(put 'pr-whisper-mode-line-indicator 'risky-local-variable t)
 
 (defun pr-whisper--start-flash ()
   "Start the flashing recording indicator."
+  (unless (member 'pr-whisper-mode-line-indicator mode-line-misc-info)
+    (push 'pr-whisper-mode-line-indicator mode-line-misc-info))
   (setq pr-whisper--flash-bright-phase t)
   (force-mode-line-update t)
   (when pr-whisper--flash-timer

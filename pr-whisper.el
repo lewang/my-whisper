@@ -38,22 +38,22 @@
 ;; Whisper models, inserting the transcribed text at your cursor.
 
 ;; Features:
-;; - `pr-whisper-mode', a global minor mode that enables speech-to-text.
-;;   While active, use C-c . to toggle recording on/off.
+;; - `pr-whisper-toggle-recording' command to start/stop recording.
 ;; - `pr-whisper-transcribe-file' command to transcribe an existing WAV file.
+;; - Flashing recording indicator in the mode line.
 ;; - Custom vocabulary support for specialized terminology
 ;; - Async processing with process sentinels
 
-;; Basic usage:
+;; Basic setup:
 ;;
-;;  1. Enable the mode: M-x pr-whisper-mode
-;;  2. Start recording: C-c .
-;;  3. Stop recording and transcribe: C-c . (same key toggles)
+;;  (use-package pr-whisper
+;;    :bind ("C-c ." . pr-whisper-toggle-recording))
 ;;
-;; The mode can stay enabled - just use C-c . whenever you want to dictate.
-;; Disabling the mode (M-x pr-whisper-mode again) stops any active recording.
+;; Or with global-set-key:
+;;
+;;  (global-set-key (kbd "C-c .") #'pr-whisper-toggle-recording)
 
-;; See the README for installation and configuration details.
+;; See the README for full configuration details.
 
 ;;; Code:
 
@@ -63,7 +63,6 @@
 ;; Server backend autoloads - loaded on demand when pr-whisper-backend is 'server
 (autoload 'pr-whisper--server-path "pr-whisper-server")
 (autoload 'pr-whisper--start-server "pr-whisper-server")
-(autoload 'pr-whisper--stop-server "pr-whisper-server")
 (autoload 'pr-whisper--transcribe-via-server "pr-whisper-server")
 
 (defgroup pr-whisper nil
@@ -72,21 +71,16 @@
   :link '(url-link :tag "pr-whisper @ Github"
                    "https://github.com/emacselements/pr-whisper"))
 
-(defcustom pr-whisper-lighter-when-recording " 🎙️ "
-  "Mode line lighter used by `pr-whisper-mode' when recording."
-  :group 'pr-whisper
-  :type 'string)
+(defvar pr-whisper-recording-start-hook nil
+  "Hook run when recording starts.")
 
-(defcustom pr-whisper-lighter-when-idle " ⏸️"
-  "Mode line lighter used by `pr-whisper-mode' when idle."
-  :group 'pr-whisper
-  :type 'string)
+(defvar pr-whisper-recording-stop-hook nil
+  "Hook run when recording stops.")
 
-(defcustom pr-whisper-key-for-toggle (kbd "C-c .")
-  "Key binding for `pr-whisper-toggle-recording'.
-Use a string of the same format that what is the output of `kbd'."
+(defcustom pr-whisper-flash-interval 0.5
+  "Interval in seconds for flashing the recording indicator."
   :group 'pr-whisper
-  :type 'key)
+  :type 'number)
 
 (defcustom pr-whisper-homedir "~/whisper.cpp/"
   "The whisper.cpp top directory."
@@ -103,8 +97,7 @@ include its directory path."
   :type 'string)
 
 (defcustom pr-whisper-model "ggml-medium.en.bin"
-  "Whisper model for accurate transcription mode.
-This model is used by `pr-whisper-mode'.
+  "Whisper model for transcription.
 
 The common options (all English) models:
 - ggml-large-v3-turbo.bin: Best accuracy, slower
@@ -236,17 +229,17 @@ Returns nil if file doesn't exist or is empty."
   "Validate current settings.
 If MODEL is nil, use `pr-whisper-model'."
   (let ((cli-path (pr-whisper--cli-path))
-        (server-path (pr-whisper--server-path))
         (model-path (pr-whisper--model-path model)))
     (unless (executable-find pr-whisper-sox)
       (user-error "The sox command is not accessible; is pr-whisper-sox valid?"))
     (unless (file-directory-p pr-whisper-homedir)
       (user-error "Invalid pr-whisper-homedir (%s)" pr-whisper-homedir))
     (if (eq pr-whisper-backend 'server)
-        (unless (file-executable-p server-path)
-          (if (file-exists-p server-path)
-              (user-error "Whisper-server (%s) is not an executable file!" server-path)
-            (user-error "Whisper-server (%s) does not exist!" server-path)))
+        (let ((server-path (pr-whisper--server-path)))
+          (unless (file-executable-p server-path)
+            (if (file-exists-p server-path)
+                (user-error "Whisper-server (%s) is not an executable file!" server-path)
+              (user-error "Whisper-server (%s) does not exist!" server-path))))
       (unless (file-executable-p cli-path)
         (if (file-exists-p cli-path)
             (user-error "Whisper-cli (%s) is not an executable file!" cli-path)
@@ -268,10 +261,13 @@ WARNING: Vocabulary file has %d words (max: 150)!"
 Recording starting with %s."
              (pr-whisper-model-desc model))))
 
+(defvar pr-whisper--recording-buffer nil
+  "Buffer that initiated the current recording, or nil when not recording.")
+
 (defvar pr-whisper--recording-process-name nil
   "Nil when inactive, name of recording process when recording.")
 (defvar pr-whisper--wav-file nil
-  "Name of wave-file used during mode execution.")
+  "Name of wave-file used during recording and transcription.")
 (defvar pr-whisper--insertion-marker nil
   "Marker where transcribed text will be inserted.
 Set when recording starts, used when transcription completes.
@@ -282,16 +278,72 @@ Each entry is a cons cell (TEXT . BUFFER-NAME).
 Entries are promoted to most recent when re-inserted via
 `pr-whisper-insert-from-history', implementing LRU-style eviction.")
 
-(defun pr-whisper--set-lighter-to (lighter)
-  "Update pr-whisper lighter in the mode lines of all buffers to LIGHTER."
-  (setcar (cdr (assq 'pr-whisper-mode minor-mode-alist)) lighter)
-  ;; force update of all modelines
+(defface pr-whisper-recording-bright
+  '((t :foreground "#ff2020" :inherit bold))
+  "Bright phase of recording indicator."
+  :group 'pr-whisper)
+
+(defface pr-whisper-recording-dim
+  '((t :foreground "#661010" :inherit bold))
+  "Dim phase of recording indicator."
+  :group 'pr-whisper)
+
+(defvar pr-whisper--flash-bright-phase t
+  "Non-nil when the recording indicator is in its bright phase.")
+
+(defvar pr-whisper--flash-timer nil
+  "Timer for flashing the recording indicator.")
+
+(defvar pr-whisper-mode-line-indicator
+  '(:eval
+    (when (and pr-whisper--recording-buffer
+              (eq (current-buffer) pr-whisper--recording-buffer))
+      (propertize " ● REC "
+                  'face (if pr-whisper--flash-bright-phase
+                            'pr-whisper-recording-bright
+                          'pr-whisper-recording-dim)
+                  'help-echo "pr-whisper recording")))
+  "Mode line construct showing a flashing recording indicator.
+Only visible in the buffer that initiated recording.
+Automatically added to `mode-line-format' when recording starts.")
+(put 'pr-whisper-mode-line-indicator 'risky-local-variable t)
+
+(defvar pr-whisper--mode-line-cell
+  (list "" 'pr-whisper-mode-line-indicator)
+  "Wrapped indicator safe for any `mode-line-format' position.")
+
+(defun pr-whisper--start-flash ()
+  "Start the flashing recording indicator."
+  (unless (member pr-whisper--mode-line-cell
+                  (default-value 'mode-line-format))
+    (set-default 'mode-line-format
+                 (cons pr-whisper--mode-line-cell
+                       (default-value 'mode-line-format))))
+  (setq pr-whisper--flash-bright-phase t)
+  (force-mode-line-update t)
+  (when pr-whisper--flash-timer
+    (cancel-timer pr-whisper--flash-timer))
+  (setq pr-whisper--flash-timer
+        (run-at-time pr-whisper-flash-interval pr-whisper-flash-interval
+                     (lambda ()
+                       (setq pr-whisper--flash-bright-phase
+                             (not pr-whisper--flash-bright-phase))
+                       (force-mode-line-update t)))))
+
+(defun pr-whisper--stop-flash ()
+  "Stop the flashing recording indicator."
+  (when pr-whisper--flash-timer
+    (cancel-timer pr-whisper--flash-timer)
+    (setq pr-whisper--flash-timer nil))
+  (setq pr-whisper--flash-bright-phase t)
   (force-mode-line-update t))
 
 (defun pr-whisper-record-audio ()
   "Record audio, store it in the specified WAV-FILE."
   ;; Save insertion point before recording starts
   (setq pr-whisper--insertion-marker (point-marker))
+  (setq pr-whisper--wav-file
+        (format "/tmp/whisper-recording-%s.wav" (emacs-pid)))
   ;; Start recording audio.
   ;; Use the sox command. Ref: https://sourceforge.net/projects/sox/
   ;;  -d : record audio
@@ -302,22 +354,25 @@ Entries are promoted to most recent when re-inserted via
   (let ((record-process-name (format "pr-whisper-record-audio-for-%s" (emacs-pid))))
     (start-process record-process-name
                    nil pr-whisper-sox
-                   "-d" "-r" " 16000" "-c" "1" "-b" "16"
+                   "-d" "-r" "16000" "-c" "1" "-b" "16"
                    pr-whisper--wav-file
                    "--no-show-progress")
     (setq pr-whisper--recording-process-name record-process-name)
-    (pr-whisper--set-lighter-to pr-whisper-lighter-when-recording)
+    (setq pr-whisper--recording-buffer (current-buffer))
+    (pr-whisper--start-flash)
     ;; Start server during recording so it warms up while user speaks
     (when (eq pr-whisper-backend 'server)
       (pr-whisper--start-server))
+    (run-hooks 'pr-whisper-recording-start-hook)
     (message "Recording audio!")))
 
 (defun pr-whisper--noise-p (text)
   "Return non-nil if TEXT is entirely noise that should be ignored.
 Only matches if the entire TEXT is a noise pattern, not partial matches."
   (and pr-whisper-noise-regexp
-       (string-match-p (concat "\\`\\(?:" pr-whisper-noise-regexp "\\)\\'")
-                       (string-trim text))))
+       (let ((case-fold-search t))
+         (string-match-p (concat "\\`\\(?:" pr-whisper-noise-regexp "\\)\\'")
+                         (string-trim text)))))
 
 (defun pr-whisper--too-short-p (text)
   "Return non-nil if TEXT is too short for history."
@@ -363,7 +418,7 @@ If USE-DEFAULT-INSERT is non-nil, bypass custom insert function."
      (t
       ;; Add to history first, before attempting insertion
       ;; so transcription is saved even if insertion fails
-      (pr-whisper--add-to-history output (buffer-name buf))
+      (pr-whisper--add-to-history output (if buf (buffer-name buf) "?"))
       (if (and pr-whisper-insert-function
                (not use-default-insert))
           (funcall pr-whisper-insert-function output marker)
@@ -391,12 +446,12 @@ If USE-DEFAULT-INSERT is non-nil, bypass custom insert function."
                                  "-f" (expand-file-name wav-file)
                                  "-nt"
                                  "-np")))
-    ;; if a vocabulary is defined, add a prompt command with it.
     (when vocab-prompt
-      (setq whisper-cmd-list (reverse whisper-cmd-list))
-      (push "--prompt" whisper-cmd-list)
-      (push (replace-regexp-in-string "\"" "\\\\\"" vocab-prompt) whisper-cmd-list)
-      (setq whisper-cmd-list (reverse whisper-cmd-list)))
+      (setq whisper-cmd-list
+            (append whisper-cmd-list
+                    (list "--prompt"
+                          (replace-regexp-in-string
+                           "\"" "\\\\\"" vocab-prompt)))))
 
     ;; Run Whisper STT (Speech To Text) with selected model
     (make-process
@@ -428,8 +483,10 @@ If USE-DEFAULT-INSERT is non-nil, bypass custom insert function."
     (user-error "Not currently recording"))
   (interrupt-process pr-whisper--recording-process-name)
   (setq pr-whisper--recording-process-name nil)
+  (setq pr-whisper--recording-buffer nil)
   (message "Audio recording stopped.")
-  (pr-whisper--set-lighter-to pr-whisper-lighter-when-idle)
+  (pr-whisper--stop-flash)
+  (run-hooks 'pr-whisper-recording-stop-hook)
   (pr-whisper--transcribe use-default-insert))
 
 ;;;###autoload
@@ -446,52 +503,19 @@ Note: Does not use *P interactive spec since vterm buffers are read-only."
       (pr-whisper--start-message model vocab-word-count)
       (pr-whisper-record-audio))))
 
-(defvar pr-whisper-keymap
-  (let ((map (make-sparse-keymap)))
-    (define-key map pr-whisper-key-for-toggle #'pr-whisper-toggle-recording)
-    map))
-
-;;;###autoload
-(define-minor-mode pr-whisper-mode
-  "Minor mode to transcribe speech to text.
-When activated, enables recording controls but does not start recording.
-Use \\[pr-whisper-toggle-recording] to start/stop recording.
-When recording stops, transcribed text is inserted at point.
-
-\\{pr-whisper-keymap}"
-  :lighter pr-whisper-lighter-when-idle
-  :keymap pr-whisper-keymap
-  :global t
-  (if pr-whisper-mode
-      ;; Start minor mode: set up wav file path, don't start recording yet
-      (let ((wav-file (format "/tmp/whisper-recording-%s.wav" (emacs-pid))))
-        (setq pr-whisper--wav-file wav-file)
-        (pr-whisper--set-lighter-to pr-whisper-lighter-when-idle)
-        (message "pr-whisper-mode enabled. Press %s to start recording."
-                 (key-description pr-whisper-key-for-toggle)))
-
-    ;; Stop minor mode: stop recording if active
-    (when pr-whisper--recording-process-name
-      (pr-whisper-stop-record))
-    ;; Ensure server is stopped when mode is disabled (only if loaded)
-    (when (fboundp 'pr-whisper--stop-server)
-      (pr-whisper--stop-server))
-    (setq pr-whisper--wav-file nil)))
-
 ;;;###autoload
 (defun pr-whisper-transcribe-file (fname)
-  "Transcribe a recorded audio file FNAME, insert transcribed text at point.
-This command can only be used when `pr-whisper-mode is inactive."
+  "Transcribe a recorded audio file FNAME, insert transcribed text at point."
   (interactive "fWAV file to transcribe: ")
-  ;; Validate requirements first
-  (if pr-whisper-mode
-      (user-error "Cannot use this command while pr-whisper-mode is active!"))
+  (when pr-whisper--recording-process-name
+    (user-error "Cannot transcribe a file while recording is active"))
   (unless (file-exists-p fname)
     (user-error "Specified file does not exist: %s" fname))
   (pr-whisper--validate-environment)
 
   ;; All is OK, transcribe the file.
-  ;; Set the name of the file
+  ;; Set insertion point and file name
+  (setq pr-whisper--insertion-marker (point-marker))
   (setq pr-whisper--wav-file fname)
   (pr-whisper--transcribe)
   (setq pr-whisper--wav-file nil))

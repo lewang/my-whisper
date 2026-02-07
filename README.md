@@ -3,14 +3,6 @@
 A simple Emacs package that provides speech-to-text functionality using Whisper.cpp.
 
 Record audio directly from Emacs and have it transcribed and inserted in current buffer at point.
-The package provides `pr-whisper-mode`, a global minor mode that starts audio recording and transcribes text when stopped.
-It also provides the `pr-whisper-transcribe-file` command to transcribe an already recorded WAV audio file.
-
-I will eventually change this page in my fork.  This is under construction.
-
-More information on how to use this fork of the project is available
-in my PEL project inside the [Writing Tools PDF](https://raw.githubusercontent.com/pierre-rouleau/pel/master/doc/pdf/writing-tools.pdf#page=2).
-[PEL](https://github.com/pierre-rouleau/pel#readme) can install the package automatically and creates bindings for the global commands.
 
 
 
@@ -72,37 +64,29 @@ bash ./models/download-ggml-model.sh base.en
 bash ./models/download-ggml-model.sh medium.en
 ```
 
+## Setup
+
+### With use-package
+
+```elisp
+(use-package pr-whisper
+  :bind ("C-c ." . pr-whisper-toggle-recording))
+```
+
+### With global-set-key
+
+```elisp
+(require 'pr-whisper)
+(global-set-key (kbd "C-c .") #'pr-whisper-toggle-recording)
+```
+
 ## Usage
 
-
-This provides the **pr-whisper-mode**, a global minor mode that provides the ability to record audio and then process it with whisper.cpp and insert transcribed text in the current buffer at point.
-
-⚠️  🚧 🚧 🚧 Most of the text below is obsolete and needs to be updated.
-
-### Key Bindings
-
-- **`M-x pr-whisper-mode`**: Enable the global minor mode (does not start recording).
-- **`C-c .`**: Toggle recording on/off. When stopped, transcribes and inserts text at point.
-- **`M-x pr-whisper-mode`**: Disable the mode (stops any active recording).
-
-
-### Basic Workflow
-
-1. **Enable mode**: `M-x pr-whisper-mode`
-2. **Start recording**: Press `C-c .`
-3. **Stop and transcribe**: Press `C-c .` again
-4. **Get results**: The transcribed text is automatically inserted at your cursor position
-
-### Example
-
-1. Open any text buffer in Emacs
-2. Enable the mode: `M-x pr-whisper-mode`
-3. Position your cursor where you want the transcribed text
-4. Press `C-c .` to start recording
-5. Speak into your microphone
-6. Press `C-c .` when finished speaking
-7. Wait a moment for transcription to complete
-8. The text appears at your cursor position
+1. Position your cursor where you want the transcribed text
+2. Press `C-c .` to start recording
+3. Speak into your microphone
+4. Press `C-c .` again to stop recording and transcribe
+5. The text appears at your cursor position
 
 ## Configuration
 
@@ -138,15 +122,6 @@ Run `M-x customize-group RET pr-whisper RET` to access all customization options
 (setq pr-whisper-backend 'server)
 ```
 
-### Custom Key Bindings
-
-To change the toggle key binding, customize `pr-whisper-key-for-toggle` or set it before loading:
-
-```elisp
-;; Use a different key binding for toggle
-(setq pr-whisper-key-for-toggle (kbd "C-c s"))
-```
-
 ### Custom Vocabulary for Proper Nouns
 
 To improve transcription accuracy for proper nouns, technical terms, or specialized vocabulary, create a vocabulary file at `~/.emacs.d/whisper-vocabulary.txt`.
@@ -161,7 +136,16 @@ This transcription discusses classical Greek philosophy, including scholars and 
 (setq pr-whisper-vocabulary-file "~/Documents/vocabulary.txt")
 ```
 
-**For detailed guidance** on vocabulary formats, tips, domain-specific examples, and managing multiple vocabularies, see [VOCABULARY-GUIDE.md](VOCABULARY-GUIDE.md).
+**For detailed guidance** on vocabulary formats, tips, domain-specific examples, and managing multiple vocabularies,
+see [VOCABULARY-GUIDE.md](VOCABULARY-GUIDE.md).
+
+### Recording Indicator (Mode Line)
+
+When recording starts, a flashing red `● REC` appears in the mode line of the buffer that initiated
+recording. The indicator is automatically added to `mode-line-format`.
+
+Customize the faces `pr-whisper-recording-bright` and `pr-whisper-recording-dim` to change colors. The
+flash speed is controlled by `pr-whisper-flash-interval` (default 0.5 seconds).
 
 ## Troubleshooting
 
@@ -184,7 +168,7 @@ This transcription discusses classical Greek philosophy, including scholars and 
 4. **Transcription not working**
    - The package now validates paths on startup and will show clear error messages
    - Verify the model files exist in `~/whisper.cpp/models/`
-   - Run `M-x pr-whisper-transcribe-fast` to see validation errors
+   - Run `M-x pr-whisper-toggle-recording` to see validation errors
    - Test whisper-cli manually with a wav file
 
 ### Testing the Setup

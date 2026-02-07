@@ -28,7 +28,6 @@ emacs -Q --batch -L . -l pr-whisper-test.el -f ert-run-tests-batch-and-exit
 
 Single-file Emacs Lisp package (`pr-whisper.el`) with these key components:
 
-- **`pr-whisper-mode`**: Global minor mode that enables recording controls (C-c . to toggle)
 - **Recording**: Uses sox to record 16kHz mono 16-bit WAV files to `/tmp/whisper-recording-<pid>.wav`
 - **Transcription backends**:
   - `cli` (default): Async process calling `whisper-cli` with process sentinel
@@ -38,7 +37,7 @@ Single-file Emacs Lisp package (`pr-whisper.el`) with these key components:
 
 ### Key Functions
 
-- `pr-whisper-toggle-recording`: Start/stop recording (bound to C-c . in mode)
+- `pr-whisper-toggle-recording`: Start/stop recording (user binds to preferred key)
 - `pr-whisper-record-audio`: Starts sox recording process
 - `pr-whisper-stop-record`: Interrupts recording, triggers transcription
 - `pr-whisper--transcribe`: Dispatches to CLI or server backend based on `pr-whisper-backend`
@@ -56,8 +55,9 @@ Single-file Emacs Lisp package (`pr-whisper.el`) with these key components:
 - `pr-whisper-server-port`: Port for whisper-server (default: 8178)
 - `pr-whisper-vocabulary-file`: Path to vocabulary hints file
 - `pr-whisper-sox`: sox executable path
-- `pr-whisper-key-for-toggle`: Key binding for toggle (default: `C-c .`)
 - `pr-whisper-history-capacity`: Max transcriptions in history ring (default: 20)
+- `pr-whisper-flash-interval`: Flash speed for recording indicator (default: 0.5s)
+- `pr-whisper-mode-line-indicator`: Flashing recording indicator (auto-added to `mode-line-format`)
 
 ## External Dependencies
 

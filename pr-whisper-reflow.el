@@ -33,10 +33,17 @@ Transcription:
   "Prompt template for reflowing transcriptions.
 %s is replaced with the transcription text.")
 
-(defcustom pr-whisper-reflow-model "gemini-2.5-flash-lite"
-  "Model to use for reflow.
-Examples: \"gemini-2.0-flash-lite\", \"qwen2.5:1.5b\" (Ollama)."
+(defcustom pr-whisper-reflow-backend "Gemini"
+  "gptel backend name for reflow.
+Must match a backend registered with gptel (e.g. \"Gemini\",
+\"ChatGPT\", \"Claude\")."
   :type 'string
+  :group 'pr-whisper)
+
+(defcustom pr-whisper-reflow-model 'gemini-2.5-flash-lite
+  "Model to use for reflow.
+Must be a symbol matching a model in `pr-whisper-reflow-backend'."
+  :type 'symbol
   :group 'pr-whisper)
 
 (defcustom pr-whisper-reflow-min-length 100
@@ -62,7 +69,8 @@ Calls `pr-whisper-reflow-predicate' to decide whether to reflow;
 otherwise uses default insertion."
   (if (funcall pr-whisper-reflow-predicate text marker)
       (let ((default-directory temporary-file-directory))
-        (gptel-with-preset `(:model ,pr-whisper-reflow-model)
+        (gptel-with-preset `(:backend ,pr-whisper-reflow-backend
+                            :model ,pr-whisper-reflow-model)
           (message "Reflowing transcription...")
           (gptel-request
            (format pr-whisper-reflow-prompt text)

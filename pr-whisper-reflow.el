@@ -17,9 +17,9 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'gptel))
 (defvar gptel-model)
 (declare-function gptel-request "gptel")
-(declare-function gptel-with-preset "gptel")
 (declare-function pr-whisper-default-insert "pr-whisper")
 (defvar pr-whisper-reflow-prompt
   "Reflow this transcription into logical paragraphs. Rules:
